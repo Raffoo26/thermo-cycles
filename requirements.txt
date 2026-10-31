@@ -1,0 +1,4 @@
+CoolProp>=6.6
+numpy
+matplotlib
+pytest
