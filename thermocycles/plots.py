@@ -83,3 +83,66 @@ def plot_ph(r: RankineResults, ax=None, title: str | None = None):
     ax.grid(alpha=0.3, which="both")
     ax.legend(loc="upper left")
     return ax
+
+
+# --- Vapour-compression cycle ------------------------------------------------
+
+def _mark_points(ax, pts):
+    for name, (x, y) in pts.items():
+        ax.plot(x, y, "o", color="C3")
+        ax.annotate(name, (x, y), textcoords="offset points",
+                    xytext=(6, 4), fontsize=11, fontweight="bold")
+
+
+def plot_refrigeration_Ts(r, ax=None, title: str | None = None):
+    """T-s diagram of a vapour-compression cycle (RefrigerationResults)."""
+    st, f = r.states, r.fluid
+    if ax is None:
+        _, ax = plt.subplots(figsize=(8, 6))
+
+    T, s_l, s_v, *_ = saturation_dome(f)
+    ax.plot(np.concatenate([s_l, s_v[::-1]]) / 1e3,
+            np.concatenate([T, T[::-1]]) - KELVIN, "k-", lw=1, label="Saturation curve")
+
+    # 1-2 compression
+    ax.plot([st["1"].s / 1e3, st["2"].s / 1e3], [st["1"].T - KELVIN, st["2"].T - KELVIN], "C0-", lw=2)
+    # 2-3 condenser and 4-1 evaporator: real isobars
+    for a, b in (("2", "3"), ("4", "1")):
+        Ti, si, _ = _isobar(st[a].p, st[a].h, st[b].h, f)
+        ax.plot(si / 1e3, Ti - KELVIN, "C0-", lw=2)
+    # 3-4 throttling: irreversible, drawn dashed
+    ax.plot([st["3"].s / 1e3, st["4"].s / 1e3], [st["3"].T - KELVIN, st["4"].T - KELVIN],
+            "C0--", lw=2, label="Throttling (irreversible)")
+
+    _mark_points(ax, {n: (p.s / 1e3, p.T - KELVIN) for n, p in st.items()})
+    ax.set_xlabel("s [kJ/(kg·K)]")
+    ax.set_ylabel("T [°C]")
+    ax.set_title(title or f"Vapour-compression cycle — {f} — COP = {r.cop_cooling:.2f}")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="upper left")
+    return ax
+
+
+def plot_refrigeration_ph(r, ax=None, title: str | None = None):
+    """p-h diagram of a vapour-compression cycle (RefrigerationResults)."""
+    st, f = r.states, r.fluid
+    if ax is None:
+        _, ax = plt.subplots(figsize=(8, 6))
+
+    _, _, _, p, h_l, h_v = saturation_dome(f)
+    ax.plot(np.concatenate([h_l, h_v[::-1]]) / 1e3,
+            np.concatenate([p, p[::-1]]) / BAR, "k-", lw=1, label="Saturation curve")
+
+    order = ["1", "2", "3", "4", "1"]
+    for a, b in zip(order, order[1:]):
+        style = "C0--" if (a, b) == ("3", "4") else "C0-"
+        ax.plot([st[a].h / 1e3, st[b].h / 1e3], [st[a].p / BAR, st[b].p / BAR], style, lw=2)
+
+    _mark_points(ax, {n: (pt.h / 1e3, pt.p / BAR) for n, pt in st.items()})
+    ax.set_yscale("log")
+    ax.set_xlabel("h [kJ/kg]")
+    ax.set_ylabel("p [bar]")
+    ax.set_title(title or f"Vapour-compression cycle — {f} — p-h diagram")
+    ax.grid(alpha=0.3, which="both")
+    ax.legend(loc="upper left")
+    return ax
