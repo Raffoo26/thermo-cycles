@@ -11,6 +11,7 @@ A Python simulator of thermodynamic power and refrigeration cycles using **real-
 - Compares **refrigerants** under the same operating conditions (R134a, R1234yf, R290, R600a, R32, ...).
 - Plots **T-s** and **p-h** diagrams with the saturation dome and the real process paths.
 - Runs **parametric studies** (e.g. efficiency versus boiler pressure and turbine inlet temperature).
+- **Interactive simulator** (`simulate.py`): enter your own values with units and get results and diagrams, no coding needed.
 - Works with any CoolProp fluid: water, but also organic fluids for ORC cycles (`R245fa`, `Toluene`, ...).
 
 ![T-s and p-h diagrams](images/rankine_Ts_ph.png)
@@ -82,39 +83,115 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## Run it with your own values (no coding needed)
+
+From the project folder, with the virtual environment active:
+
+```bash
+python simulate.py
+```
+
+The simulator asks which cycle you want, then asks for every value with its **unit of measurement** and a **default** in square brackets. Press Enter to keep the default, or type your own value. Example session:
+
+```text
+Which cycle do you want to simulate?
+    1) Rankine cycle (power plant)
+    2) Refrigeration / heat pump cycle
+  Choice [1]: 2
+
+VAPOUR-COMPRESSION CYCLE (refrigerator / air conditioner / heat pump)
+  Refrigerant [R134a]: R290
+  Evaporating temperature [°C] [-10.0]: -5
+  Condensing temperature [°C] [40.0]: 45
+  Superheat at compressor inlet [K] [0.0]: 5
+  Subcooling at condenser outlet [K] [0.0]: 3
+  Compressor isentropic efficiency [0-1 or %] [1.0]: 75
+  Cooling capacity [kW] [optional]: 3.5
+```
+
+It then prints the state table and all results, sizes the system if you gave a power or capacity (mass flow, compressor/turbine power, heat exchanged), and saves the T-s and p-h diagrams as PNG files in the `results/` folder.
+
+Input tips:
+- Decimals can be written with a point or a comma (`0.08` or `0,08`).
+- Efficiencies can be written as a fraction or a percentage (`0.85` or `85`).
+- Fluid names follow [CoolProp](http://www.coolprop.org/fluid_properties/PurePseudoPure.html#list-of-fluids): e.g. `Water`, `R134a`, `R1234yf`, `R290`, `R600a`, `R32`, `R410A`, `Ammonia`, `R245fa`, `Toluene`.
+- Invalid inputs (e.g. condenser pressure higher than boiler pressure, or condensing above the critical temperature) are rejected with an explanation.
+
+## Use it from Python
 
 ```python
-from thermocycles import rankine_cycle
-from thermocycles.plots import plot_Ts
+from thermocycles import rankine_cycle, refrigeration_cycle
+from thermocycles.plots import plot_Ts, plot_refrigeration_ph
 
 r = rankine_cycle(p_high_bar=80, p_low_bar=0.08, T_max_C=480,
                   eta_turbine=0.85, eta_pump=0.85)
-r.summary()
+r.summary()                      # prints the state table and the results
+print(r.efficiency)              # ≈ 0.337
 plot_Ts(r)
+
+hp = refrigeration_cycle(T_evap_C=-10, T_cond_C=40, superheat_K=5,
+                         subcooling_K=3, eta_comp=0.75, fluid="R290")
+print(hp.cop_heating)            # COP as a heat pump
+plot_refrigeration_ph(hp)
 ```
 
-```python
-from thermocycles import refrigeration_cycle
-from thermocycles.plots import plot_refrigeration_ph
+### `rankine_cycle(...)` — input parameters
 
-r = refrigeration_cycle(T_evap_C=-10, T_cond_C=40, superheat_K=5,
-                        subcooling_K=3, eta_comp=0.75, fluid="R290")
-r.summary()
-plot_refrigeration_ph(r)
-```
+| Parameter | Unit | Default | Meaning |
+|---|---|---|---|
+| `p_high_bar` | bar | required | Boiler (maximum) pressure |
+| `p_low_bar` | bar | required | Condenser (minimum) pressure |
+| `T_max_C` | °C | `None` | Turbine inlet temperature; `None` = saturated vapour (no superheat) |
+| `eta_turbine` | – | `1.0` | Turbine isentropic efficiency (1 = ideal) |
+| `eta_pump` | – | `1.0` | Pump isentropic efficiency (1 = ideal) |
+| `fluid` | – | `"Water"` | CoolProp fluid name |
 
-Full examples with plots:
+### `rankine_cycle(...)` — results
+
+| Attribute / method | Unit | Meaning |
+|---|---|---|
+| `efficiency` | – | Thermal efficiency w<sub>net</sub> / q<sub>in</sub> |
+| `w_turbine`, `w_pump`, `w_net` | J/kg | Specific work of turbine, pump and net |
+| `q_in`, `q_out` | J/kg | Heat supplied in the boiler / rejected in the condenser |
+| `bwr` | – | Back Work Ratio w<sub>pump</sub> / w<sub>turbine</sub> |
+| `mass_flow_for_power(P)` | kg/s | Mass flow for a net power `P` in **W** |
+| `states["1"]` … `states["4"]` | SI | State points: `.p` [Pa], `.T` [K], `.h` [J/kg], `.s` [J/(kg·K)], `.x` [–] |
+| `warnings` | – | List of warnings (e.g. low turbine exhaust quality) |
+
+### `refrigeration_cycle(...)` — input parameters
+
+| Parameter | Unit | Default | Meaning |
+|---|---|---|---|
+| `T_evap_C` | °C | required | Evaporating (saturation) temperature |
+| `T_cond_C` | °C | required | Condensing (saturation) temperature |
+| `superheat_K` | K | `0` | Vapour superheat at the compressor inlet |
+| `subcooling_K` | K | `0` | Liquid subcooling at the condenser outlet |
+| `eta_comp` | – | `1.0` | Compressor isentropic efficiency (1 = ideal) |
+| `fluid` | – | `"R134a"` | CoolProp refrigerant name |
+
+### `refrigeration_cycle(...)` — results
+
+| Attribute / method | Unit | Meaning |
+|---|---|---|
+| `cop_cooling` | – | COP as a refrigerator / air conditioner q<sub>evap</sub> / w<sub>comp</sub> |
+| `cop_heating` | – | COP as a heat pump q<sub>cond</sub> / w<sub>comp</sub> |
+| `cop_carnot_cooling` | – | Reverse Carnot COP between evaporating and condensing temperatures |
+| `w_comp`, `q_evap`, `q_cond` | J/kg | Compressor work, refrigerating effect, heat to condenser |
+| `pressure_ratio` | – | p<sub>cond</sub> / p<sub>evap</sub> |
+| `discharge_temperature_C` | °C | Compressor discharge temperature |
+| `volumetric_capacity` | J/m³ | Cooling per m³ of vapour drawn in by the compressor |
+| `mass_flow_for_cooling(Q)` | kg/s | Refrigerant mass flow for a cooling capacity `Q` in **W** |
+| `states["1"]` … `states["4"]` | SI | State points (same attributes as above) |
+| `warnings` | – | List of warnings (e.g. high discharge temperature) |
+
+Inputs use practical units (bar, °C); all results are in SI units (Pa, K, J/kg). Divide by 1000 for kJ/kg, by 10<sup>5</sup> for bar, subtract 273.15 for °C.
+
+## Examples and tests
 
 ```bash
-python examples/rankine_example.py
-python examples/refrigeration_example.py
-```
-
-Tests:
-
-```bash
-pytest
+python examples/rankine_example.py         # Rankine diagrams + parametric study
+python examples/refrigeration_example.py   # refrigeration diagrams + refrigerant comparison
+pytest                                     # validation and unit tests
 ```
 
 ## Roadmap
