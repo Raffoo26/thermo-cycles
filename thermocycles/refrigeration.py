@@ -12,21 +12,24 @@ evaporator) or as a heat pump (useful effect: heat released in the condenser).
 Inputs use evaporating/condensing temperatures in °C, as in practice.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from CoolProp.CoolProp import PropsSI
 
-from .rankine import BAR, KELVIN, State, state_from
+from .core import BAR, KELVIN, Component, CycleResults, isentropic_process, state_from
 
 
 @dataclass
-class RefrigerationResults:
-    states: dict[str, State]
-    fluid: str
-    w_comp: float      # J/kg, compressor work
-    q_evap: float      # J/kg, heat absorbed in the evaporator (refrigerating effect)
-    q_cond: float      # J/kg, heat released in the condenser
-    warnings: list[str] = field(default_factory=list)
+class RefrigerationResults(CycleResults):
+    w_comp: float = 0.0   # J/kg, compressor work
+    q_evap: float = 0.0   # J/kg, heat absorbed in the evaporator (refrigerating effect)
+    q_cond: float = 0.0   # J/kg, heat released in the condenser
+
+    name = "Vapour-compression cycle"
+
+    @property
+    def headline(self) -> str:
+        return f"COP = {self.cop_cooling:.2f}"
 
     @property
     def cop_cooling(self) -> float:
@@ -65,23 +68,17 @@ class RefrigerationResults:
         return capacity_W / self.q_evap
 
     def summary(self) -> None:
-        print(f"\nVapour-compression cycle — fluid: {self.fluid}")
-        print("  # |   p [bar] |   T [°C] | h [kJ/kg] | s [kJ/kgK] |   x")
-        print("-" * 62)
-        for st in self.states.values():
-            print(st.row())
-        print("-" * 62)
+        self._print_states()
         print(f"Compressor work        : {self.w_comp / 1e3:8.2f} kJ/kg")
         print(f"Refrigerating effect   : {self.q_evap / 1e3:8.2f} kJ/kg")
         print(f"Heat to condenser      : {self.q_cond / 1e3:8.2f} kJ/kg")
         print(f"COP cooling            : {self.cop_cooling:8.2f}")
         print(f"COP heating            : {self.cop_heating:8.2f}")
         print(f"COP Carnot (cooling)   : {self.cop_carnot_cooling:8.2f}")
-        print(f"Second-law efficiency  : {self.cop_cooling / self.cop_carnot_cooling * 100:8.1f} %")
+        print(f"COP / Carnot COP       : {self.cop_cooling / self.cop_carnot_cooling * 100:8.1f} %")
         print(f"Pressure ratio         : {self.pressure_ratio:8.2f}")
         print(f"Discharge temperature  : {self.discharge_temperature_C:8.1f} °C")
-        for w in self.warnings:
-            print(f"WARNING: {w}")
+        self._print_warnings()
 
 
 def refrigeration_cycle(T_evap_C: float, T_cond_C: float, superheat_K: float = 0.0,
@@ -121,9 +118,7 @@ def refrigeration_cycle(T_evap_C: float, T_cond_C: float, superheat_K: float = 0
         s1 = state_from("1", fluid, "P", p_evap, "T", T_e + superheat_K)
 
     # 2: compression (isentropic, then corrected with the efficiency)
-    h2s = PropsSI("H", "P", p_cond, "S", s1.s, fluid)
-    h2 = s1.h + (h2s - s1.h) / eta_comp
-    s2 = state_from("2", fluid, "P", p_cond, "H", h2)
+    s2 = isentropic_process("2", s1, p_cond, eta_comp, fluid, expansion=False)
 
     # 3: condenser outlet
     if subcooling_K == 0:
@@ -141,11 +136,18 @@ def refrigeration_cycle(T_evap_C: float, T_cond_C: float, superheat_K: float = 0
         warnings.append(f"evaporating pressure below atmospheric ({p_evap / BAR:.2f} bar): "
                         "air and moisture could leak into the circuit.")
 
+    w_comp, q_evap, q_cond = s2.h - s1.h, s1.h - s4.h, s2.h - s3.h
+    components = [
+        Component("Compressor", [(s1, 1.0)], [(s2, 1.0)]),
+        Component("Condenser", [(s2, 1.0)], [(s3, 1.0)], -q_cond, "sink"),
+        Component("Expansion valve", [(s3, 1.0)], [(s4, 1.0)]),
+        Component("Evaporator", [(s4, 1.0)], [(s1, 1.0)], q_evap, "cold"),
+    ]
     return RefrigerationResults(
         states={"1": s1, "2": s2, "3": s3, "4": s4},
         fluid=fluid,
-        w_comp=s2.h - s1.h,
-        q_evap=s1.h - s4.h,
-        q_cond=s2.h - s3.h,
+        paths=[("1", "2", "line"), ("2", "3", "isobar"), ("3", "4", "throttle"), ("4", "1", "isobar")],
+        components=components,
         warnings=warnings,
+        w_comp=w_comp, q_evap=q_evap, q_cond=q_cond,
     )

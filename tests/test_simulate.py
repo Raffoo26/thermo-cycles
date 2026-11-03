@@ -39,3 +39,12 @@ def test_ask_retries_until_valid(monkeypatch):
     answers = iter(["abc", "", "12,5"])
     monkeypatch.setattr("builtins.input", lambda _: next(answers))
     assert ask("Required value") == 12.5
+
+
+def test_parse_fraction_allows_zero():
+    from simulate import parse_fraction
+    assert parse_fraction("0") == 0
+    assert parse_fraction("80") == pytest.approx(0.8)
+    assert parse_fraction("0,6") == pytest.approx(0.6)
+    with pytest.raises(ValueError):
+        parse_fraction("-1")

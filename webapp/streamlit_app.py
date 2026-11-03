@@ -1,0 +1,249 @@
+"""
+Thermo Cycles — web app.
+
+Run locally from the project root:
+    pip install -r webapp/requirements.txt
+    streamlit run webapp/streamlit_app.py
+"""
+
+import io
+import sys
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+import pandas as pd  # noqa: E402
+import streamlit as st  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from thermocycles import (brayton_cycle, critical_point, exergy_analysis,  # noqa: E402
+                          rankine_reheat_regen_cycle, refrigeration_cycle,
+                          saturation_pressure_bar)
+from thermocycles.plots import plot_exergy, plot_ph, plot_Ts  # noqa: E402
+
+REPO = "https://github.com/Raffoo26/thermo-cycles"
+
+st.set_page_config(page_title="Thermo Cycles", page_icon="🔥", layout="wide")
+
+
+def fluid_picker(label, options, default, key):
+    choice = st.sidebar.selectbox(label, options + ["Other (type a CoolProp name)"],
+                                  index=options.index(default), key=key)
+    if choice.startswith("Other"):
+        return st.sidebar.text_input("CoolProp fluid name", "R1234ze(E)", key=key + "_other").strip()
+    return choice
+
+
+def rankine_defaults(fluid):
+    """Sensible starting values for each fluid (steam plant for water, ORC otherwise)."""
+    if fluid == "Water":
+        return 80.0, 0.08, 480.0
+    T_crit, _ = critical_point(fluid)
+    T_evap = min(120.0, T_crit - 25)
+    p_high = round(saturation_pressure_bar(fluid, T_evap), 2)
+    p_low = round(saturation_pressure_bar(fluid, 35.0), 3)
+    return p_high, p_low, T_evap + 10
+
+
+def pct(label, default, key, lo=40, hi=100):
+    return st.sidebar.slider(label, lo, hi, default, step=1, format="%d %%", key=key) / 100
+
+
+# --- Sidebar: inputs ----------------------------------------------------------
+st.sidebar.title("🔥 Thermo Cycles")
+cycle = st.sidebar.radio("Cycle", ["Rankine (steam / ORC power plant)",
+                                   "Refrigeration / heat pump",
+                                   "Brayton (gas turbine)"])
+st.sidebar.divider()
+
+try:
+    if cycle.startswith("Rankine"):
+        fluid = fluid_picker("Working fluid", ["Water", "R245fa", "R1233zd(E)", "Isopentane",
+                                               "n-Pentane", "Toluene", "R134a"], "Water", "rk_fluid")
+        d_high, d_low, d_T = rankine_defaults(fluid)
+        p_high = st.sidebar.number_input("Boiler pressure [bar]", 0.01, 1000.0, d_high, 1.0, key=f"ph_{fluid}")
+        p_low = st.sidebar.number_input("Condenser pressure [bar]", 0.001, 100.0, d_low, 0.01,
+                                        format="%.3f", key=f"pl_{fluid}")
+        superheat = st.sidebar.checkbox("Superheated vapour at turbine inlet", True)
+        T_max = st.sidebar.number_input("Turbine inlet temperature [°C]", -50.0, 1000.0, d_T, 5.0,
+                                        key=f"tm_{fluid}") if superheat else None
+        reheat = st.sidebar.checkbox("Reheat", False)
+        p_rh = T_rh = None
+        if reheat:
+            p_rh = st.sidebar.number_input("Reheat pressure [bar]", 0.01, 1000.0, 7.0, 0.5)
+            T_rh = st.sidebar.number_input("Temperature after reheat [°C]", -50.0, 1000.0,
+                                           T_max if T_max is not None else 440.0, 5.0)
+        fwh = st.sidebar.checkbox("Regeneration (open feedwater heater)", False)
+        p_fwh = st.sidebar.number_input("Feedwater heater pressure [bar]", 0.01, 1000.0, 7.0, 0.5) \
+            if fwh else None
+        eta_t = pct("Turbine isentropic efficiency", 85, "rk_eta_t")
+        eta_p = pct("Pump isentropic efficiency", 85, "rk_eta_p")
+        power = st.sidebar.number_input("Net power output [MW] (for sizing)", 0.0, 5000.0, 100.0, 10.0)
+        r = rankine_reheat_regen_cycle(p_high, p_low, T_max, p_rh, T_rh, p_fwh, eta_t, eta_p, fluid)
+
+    elif cycle.startswith("Refrigeration"):
+        fluid = fluid_picker("Refrigerant", ["R134a", "R1234yf", "R290", "R600a", "R32", "R410A",
+                                             "Ammonia"], "R134a", "rf_fluid")
+        T_evap = st.sidebar.number_input("Evaporating temperature [°C]", -100.0, 100.0, -10.0, 1.0)
+        T_cond = st.sidebar.number_input("Condensing temperature [°C]", -50.0, 150.0, 40.0, 1.0)
+        sh = st.sidebar.number_input("Superheat at compressor inlet [K]", 0.0, 50.0, 5.0, 1.0)
+        sc = st.sidebar.number_input("Subcooling at condenser outlet [K]", 0.0, 50.0, 3.0, 1.0)
+        eta_c = pct("Compressor isentropic efficiency", 75, "rf_eta_c")
+        capacity = st.sidebar.number_input("Cooling capacity [kW] (for sizing)", 0.0, 100000.0, 3.5, 0.5)
+        r = refrigeration_cycle(T_evap, T_cond, sh, sc, eta_c, fluid)
+
+    else:
+        fluid = fluid_picker("Working gas", ["Air", "Nitrogen", "Helium", "CO2"], "Air", "br_fluid")
+        pr = st.sidebar.number_input("Compressor pressure ratio [-]", 1.1, 100.0, 10.0, 0.5)
+        TIT = st.sidebar.number_input("Turbine inlet temperature [°C]", 100.0, 2000.0, 1200.0, 10.0)
+        T_in = st.sidebar.number_input("Compressor inlet temperature [°C]", -50.0, 100.0, 15.0, 1.0)
+        p_in = st.sidebar.number_input("Compressor inlet pressure [bar]", 0.1, 50.0, 1.013, 0.01, format="%.3f")
+        eta_c = pct("Compressor isentropic efficiency", 86, "br_eta_c")
+        eta_tb = pct("Turbine isentropic efficiency", 89, "br_eta_t")
+        eps = st.sidebar.slider("Regenerator effectiveness (0 = none)", 0, 100, 0, 5, format="%d %%") / 100
+        power = st.sidebar.number_input("Net power output [MW] (for sizing)", 0.0, 2000.0, 50.0, 5.0)
+        r = brayton_cycle(pr, TIT, T_in, p_in, eta_c, eta_tb, eps, fluid)
+
+except ValueError as e:
+    st.title("Thermo Cycles")
+    st.error(f"These inputs are not physically possible: {e}")
+    st.stop()
+
+# --- Exergy analysis settings (an error here does not hide the other results) --
+st.sidebar.divider()
+ex, ex_error = None, None
+with st.sidebar.expander("Exergy analysis settings"):
+    if cycle.startswith("Brayton"):
+        default_T0 = float(T_in)          # open gas turbine: the ambient is the intake air
+    elif cycle.startswith("Refrigeration"):
+        default_T0 = 25.0
+    else:
+        default_T0 = 20.0
+    T0 = st.number_input("Ambient (dead state) temperature [°C]", -30.0, 50.0, default_T0, 1.0,
+                         key=f"T0_{cycle}")
+    try:
+        if cycle.startswith("Refrigeration"):
+            T_res = st.number_input("Refrigerated space temperature [°C]", -100.0, 50.0,
+                                    float(round(r.states["1"].T - 273.15 + 5)), 1.0)
+            ex = exergy_analysis(r, T0_C=T0, T_cold_C=T_res)
+        else:
+            T_res = st.number_input("Hot source temperature [°C] (flame, flue gas…)", 0.0, 3000.0,
+                                    1800.0 if cycle.startswith("Brayton") else
+                                    (1200.0 if r.fluid == "Water" else 150.0), 10.0,
+                                    key=f"Tsrc_{cycle}_{r.fluid}")
+            ex = exergy_analysis(r, T0_C=T0, T_source_C=T_res)
+    except ValueError as e:
+        ex_error = str(e)
+
+# --- Main page: results -------------------------------------------------------
+st.title(f"{r.name} — {r.fluid}")
+st.caption(f"Real-fluid properties from CoolProp · validated against textbook examples · [source code]({REPO})")
+
+for w in r.warnings:
+    st.warning(w)
+
+if cycle.startswith("Refrigeration"):
+    m = r.mass_flow_for_cooling(capacity * 1e3) if capacity > 0 else None
+    cols = st.columns(5)
+    cols[0].metric("COP cooling", f"{r.cop_cooling:.2f}")
+    cols[1].metric("COP heating (heat pump)", f"{r.cop_heating:.2f}")
+    cols[2].metric("Carnot COP", f"{r.cop_carnot_cooling:.2f}")
+    cols[3].metric("Discharge temperature", f"{r.discharge_temperature_C:.1f} °C")
+    cols[4].metric("Pressure ratio", f"{r.pressure_ratio:.2f}")
+    sizing = {
+        "Refrigerating effect [kJ/kg]": r.q_evap / 1e3,
+        "Compressor work [kJ/kg]": r.w_comp / 1e3,
+        "Heat to condenser [kJ/kg]": r.q_cond / 1e3,
+        "Volumetric cooling capacity [kJ/m³]": r.volumetric_capacity / 1e3,
+    }
+    if m:
+        sizing.update({"Refrigerant mass flow [g/s]": m * 1e3,
+                       "Compressor power [kW]": m * r.w_comp / 1e3,
+                       "Heating capacity as heat pump [kW]": m * r.q_cond / 1e3})
+else:
+    m = r.mass_flow_for_power(power * 1e6) if power > 0 else None
+    cols = st.columns(4)
+    cols[0].metric("Thermal efficiency", f"{r.efficiency * 100:.1f} %")
+    cols[1].metric("Net work", f"{r.w_net / 1e3:.0f} kJ/kg")
+    cols[2].metric("Back Work Ratio", f"{r.bwr * 100:.1f} %")
+    cols[3].metric("Second-law efficiency", f"{ex.efficiency * 100:.1f} %" if ex else "–")
+    if cycle.startswith("Rankine"):
+        sizing = {"Turbine work [kJ/kg]": r.w_turbine / 1e3, "Pump work [kJ/kg]": r.w_pump / 1e3,
+                  "Heat input [kJ/kg]": r.q_in / 1e3, "Heat rejected [kJ/kg]": r.q_out / 1e3}
+        if r.extraction_fraction:
+            sizing["Extraction fraction y [-]"] = r.extraction_fraction
+        if m:
+            sizing.update({"Steam mass flow [kg/s]": m, "Boiler + reheat duty [MW]": m * r.q_in / 1e6,
+                           "Condenser duty [MW]": m * r.q_out / 1e6})
+    else:
+        sizing = {"Compressor work [kJ/kg]": r.w_comp / 1e3, "Turbine work [kJ/kg]": r.w_turb / 1e3,
+                  "Heat input [kJ/kg]": r.q_in / 1e3, "Exhaust temperature [°C]": r.exhaust_temperature_C}
+        if m:
+            sizing.update({"Air mass flow [kg/s]": m, "Fuel heat input [MW]": m * r.q_in / 1e6,
+                           "Compressor power [MW]": m * r.w_comp / 1e6})
+
+tab_diag, tab_states, tab_exergy, tab_about = st.tabs(
+    ["📈 Diagrams", "📋 States & results", "♻️ Exergy analysis", "ℹ️ About"])
+
+with tab_diag:
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5))
+    plot_Ts(r, ax=ax1)
+    plot_ph(r, ax=ax2)
+    fig.tight_layout()
+    st.pyplot(fig)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150)
+    st.download_button("Download diagrams (PNG)", buf.getvalue(), "thermo_cycle_diagrams.png", "image/png")
+    plt.close(fig)
+
+with tab_states:
+    left, right = st.columns([3, 2])
+    states_df = pd.DataFrame(r.state_table()).set_index("State")
+    left.subheader("Thermodynamic states")
+    left.dataframe(states_df.style.format(precision=4, na_rep="–"), use_container_width=True)
+    left.download_button("Download states (CSV)", states_df.to_csv().encode(), "states.csv", "text/csv")
+    right.subheader("Energy balance and sizing")
+    right.dataframe(pd.DataFrame({"Value": sizing}).style.format(precision=3), use_container_width=True)
+
+with tab_exergy:
+    if ex is None:
+        st.error(f"Exergy analysis not possible with these reservoir temperatures: {ex_error}")
+        st.info("Change them in *Exergy analysis settings* in the sidebar.")
+    else:
+        st.markdown(f"**Second-law efficiency: {ex.efficiency * 100:.1f} %** — fuel: {ex.fuel_label} "
+                    f"({ex.fuel / 1e3:.1f} kJ/kg), product: {ex.product_label} ({ex.product / 1e3:.1f} kJ/kg). "
+                    "Change the reservoir temperatures in *Exergy analysis settings* in the sidebar.")
+        fig, ax = plt.subplots(figsize=(9, 4))
+        plot_exergy(ex, ax=ax)
+        fig.tight_layout()
+        st.pyplot(fig)
+        plt.close(fig)
+        st.dataframe(pd.DataFrame(ex.table()).set_index("Component").style.format(precision=2),
+                     use_container_width=True)
+        for n in ex.notes:
+            st.info(n)
+
+with tab_about:
+    T_crit, p_crit = critical_point(r.fluid)
+    st.markdown(f"""
+**{r.fluid}** — critical point: {T_crit:.1f} °C, {p_crit:.2f} bar.
+
+This app solves thermodynamic cycles with real-fluid properties from
+[CoolProp](http://www.coolprop.org/). The solvers are validated against worked examples of
+Moran & Shapiro, *Fundamentals of Engineering Thermodynamics* (deviation below 1 %).
+
+- **Rankine**: simple, with reheat, with an open feedwater heater, or both. Works with water and
+  organic fluids (ORC).
+- **Refrigeration / heat pump**: single-stage subcritical vapour compression with superheat,
+  subcooling and compressor efficiency (transcritical CO₂ cycles are not supported).
+- **Brayton**: air-standard gas turbine with real-gas properties and optional regenerator.
+- **Exergy analysis**: exergy destroyed in every component (Gouy–Stodola) and second-law efficiency.
+
+Inputs: pressures in bar, temperatures in °C, efficiencies in %. Results per kg of working fluid,
+plus plant sizing for the power or capacity you enter.
+
+Source code, documentation and tests: [{REPO}]({REPO})
+""")
