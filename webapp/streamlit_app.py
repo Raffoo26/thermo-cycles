@@ -29,6 +29,51 @@ REPO = "https://github.com/Raffoo26/thermo-cycles"
 st.set_page_config(page_title="Thermo Cycles", page_icon="🔥", layout="wide")
 
 
+# --- Cached computations ------------------------------------------------------
+# The free hosting has a small CPU: every combination of inputs is computed and
+# drawn only once, so the server stays responsive.
+SOLVERS = {"rankine": rankine_reheat_regen_cycle, "refrigeration": refrigeration_cycle,
+           "brayton": brayton_cycle}
+
+
+@st.cache_data(show_spinner=False, max_entries=300)
+def solve(kind, args):
+    return SOLVERS[kind](*args)
+
+
+@st.cache_data(show_spinner=False, max_entries=300)
+def exergy(kind, args, T0, T_res):
+    r = solve(kind, args)
+    if kind == "refrigeration":
+        return exergy_analysis(r, T0_C=T0, T_cold_C=T_res)
+    return exergy_analysis(r, T0_C=T0, T_source_C=T_res)
+
+
+def _png(fig) -> bytes:
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=110)
+    plt.close(fig)
+    return buf.getvalue()
+
+
+@st.cache_data(show_spinner=False, max_entries=300)
+def diagrams_png(kind, args) -> bytes:
+    r = solve(kind, args)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5))
+    plot_Ts(r, ax=ax1)
+    plot_ph(r, ax=ax2)
+    fig.tight_layout()
+    return _png(fig)
+
+
+@st.cache_data(show_spinner=False, max_entries=300)
+def exergy_png(kind, args, T0, T_res) -> bytes:
+    fig, ax = plt.subplots(figsize=(9, 4))
+    plot_exergy(exergy(kind, args, T0, T_res), ax=ax)
+    fig.tight_layout()
+    return _png(fig)
+
+
 def fluid_picker(label, options, default, key):
     choice = st.sidebar.selectbox(label, options + ["Other (type a CoolProp name)"],
                                   index=options.index(default), key=key)
@@ -37,6 +82,7 @@ def fluid_picker(label, options, default, key):
     return choice
 
 
+@st.cache_data(show_spinner=False)
 def rankine_defaults(fluid):
     """Sensible starting values for each fluid (steam plant for water, ORC otherwise)."""
     if fluid == "Water":
@@ -82,7 +128,7 @@ try:
         eta_t = pct("Turbine isentropic efficiency", 85, "rk_eta_t")
         eta_p = pct("Pump isentropic efficiency", 85, "rk_eta_p")
         power = st.sidebar.number_input("Net power output [MW] (for sizing)", 0.0, 5000.0, 100.0, 10.0)
-        r = rankine_reheat_regen_cycle(p_high, p_low, T_max, p_rh, T_rh, p_fwh, eta_t, eta_p, fluid)
+        kind, args = "rankine", (p_high, p_low, T_max, p_rh, T_rh, p_fwh, eta_t, eta_p, fluid)
 
     elif cycle.startswith("Refrigeration"):
         fluid = fluid_picker("Refrigerant", ["R134a", "R1234yf", "R290", "R600a", "R32", "R410A",
@@ -93,7 +139,7 @@ try:
         sc = st.sidebar.number_input("Subcooling at condenser outlet [K]", 0.0, 50.0, 3.0, 1.0)
         eta_c = pct("Compressor isentropic efficiency", 75, "rf_eta_c")
         capacity = st.sidebar.number_input("Cooling capacity [kW] (for sizing)", 0.0, 100000.0, 3.5, 0.5)
-        r = refrigeration_cycle(T_evap, T_cond, sh, sc, eta_c, fluid)
+        kind, args = "refrigeration", (T_evap, T_cond, sh, sc, eta_c, fluid)
 
     else:
         fluid = fluid_picker("Working gas", ["Air", "Nitrogen", "Helium", "CO2"], "Air", "br_fluid")
@@ -105,7 +151,9 @@ try:
         eta_tb = pct("Turbine isentropic efficiency", 89, "br_eta_t")
         eps = st.sidebar.slider("Regenerator effectiveness (0 = none)", 0, 100, 0, 5, format="%d %%") / 100
         power = st.sidebar.number_input("Net power output [MW] (for sizing)", 0.0, 2000.0, 50.0, 5.0)
-        r = brayton_cycle(pr, TIT, T_in, p_in, eta_c, eta_tb, eps, fluid)
+        kind, args = "brayton", (pr, TIT, T_in, p_in, eta_c, eta_tb, eps, fluid)
+
+    r = solve(kind, args)
 
 except ValueError as e:
     st.title("Thermo Cycles")
@@ -128,13 +176,13 @@ with st.sidebar.expander("Exergy analysis settings"):
         if cycle.startswith("Refrigeration"):
             T_res = st.number_input("Refrigerated space temperature [°C]", -100.0, 50.0,
                                     float(round(r.states["1"].T - 273.15 + 5)), 1.0)
-            ex = exergy_analysis(r, T0_C=T0, T_cold_C=T_res)
+            ex = exergy(kind, args, T0, T_res)
         else:
             T_res = st.number_input("Hot source temperature [°C] (flame, flue gas…)", 0.0, 3000.0,
                                     1800.0 if cycle.startswith("Brayton") else
                                     (1200.0 if r.fluid == "Water" else 150.0), 10.0,
                                     key=f"Tsrc_{cycle}_{r.fluid}")
-            ex = exergy_analysis(r, T0_C=T0, T_source_C=T_res)
+            ex = exergy(kind, args, T0, T_res)
     except ValueError as e:
         ex_error = str(e)
 
@@ -189,24 +237,18 @@ tab_diag, tab_states, tab_exergy, tab_about = st.tabs(
     ["📈 Diagrams", "📋 States & results", "♻️ Exergy analysis", "ℹ️ About"])
 
 with tab_diag:
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5))
-    plot_Ts(r, ax=ax1)
-    plot_ph(r, ax=ax2)
-    fig.tight_layout()
-    st.pyplot(fig)
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150)
-    st.download_button("Download diagrams (PNG)", buf.getvalue(), "thermo_cycle_diagrams.png", "image/png")
-    plt.close(fig)
+    png = diagrams_png(kind, args)
+    st.image(png)
+    st.download_button("Download diagrams (PNG)", png, "thermo_cycle_diagrams.png", "image/png")
 
 with tab_states:
     left, right = st.columns([3, 2])
     states_df = pd.DataFrame(r.state_table()).set_index("State")
     left.subheader("Thermodynamic states")
-    left.dataframe(states_df.style.format(precision=4, na_rep="–"), use_container_width=True)
+    left.dataframe(states_df.style.format(precision=4, na_rep="–"))
     left.download_button("Download states (CSV)", states_df.to_csv().encode(), "states.csv", "text/csv")
     right.subheader("Energy balance and sizing")
-    right.dataframe(pd.DataFrame({"Value": sizing}).style.format(precision=3), use_container_width=True)
+    right.dataframe(pd.DataFrame({"Value": sizing}).style.format(precision=3))
 
 with tab_exergy:
     if ex is None:
@@ -216,13 +258,8 @@ with tab_exergy:
         st.markdown(f"**Second-law efficiency: {ex.efficiency * 100:.1f} %** — fuel: {ex.fuel_label} "
                     f"({ex.fuel / 1e3:.1f} kJ/kg), product: {ex.product_label} ({ex.product / 1e3:.1f} kJ/kg). "
                     "Change the reservoir temperatures in *Exergy analysis settings* in the sidebar.")
-        fig, ax = plt.subplots(figsize=(9, 4))
-        plot_exergy(ex, ax=ax)
-        fig.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
-        st.dataframe(pd.DataFrame(ex.table()).set_index("Component").style.format(precision=2),
-                     use_container_width=True)
+        st.image(exergy_png(kind, args, T0, T_res))
+        st.dataframe(pd.DataFrame(ex.table()).set_index("Component").style.format(precision=2))
         for n in ex.notes:
             st.info(n)
 
