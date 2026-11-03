@@ -29,7 +29,7 @@ def saturation_dome(fluid: str, n: int = 200):
     return T, s_l, s_v, p, h_l, h_v
 
 
-def _isobar(p: float, h_from: float, h_to: float, fluid: str, n: int = 100):
+def _isobar(p: float, h_from: float, h_to: float, fluid: str, n: int = 50):
     """(T, s, h) points along an isobar between two enthalpies; follows the real path inside the dome too."""
     h = np.linspace(h_from, h_to, n)
     T = np.array([PropsSI("T", "P", p, "H", hh, fluid) for hh in h])
