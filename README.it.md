@@ -2,14 +2,17 @@
 
 🇬🇧 [English version](README.md)
 
+[![Web app](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://thermo-cycles.streamlit.app)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Raffoo26/thermo-cycles/blob/main/notebooks/thermo_cycles_demo.ipynb)
+
+**▶ Provalo online: [thermo-cycles.streamlit.app](https://thermo-cycles.streamlit.app)**
 
 Simulatore in Python di cicli termodinamici diretti e inversi con **proprietà reali dei fluidi** ([CoolProp](http://www.coolprop.org/)), con **analisi exergetica**, **simulatore interattivo**, **web app** e notebook da usare nel browser. Nato per mettere in pratica i corsi di Fisica Tecnica e Macchine a Fluido. Ogni modulo è **validato su esempi svolti di letteratura**.
 
 ## Provalo senza installare niente
 
 - **Google Colab**: clicca il pulsante *Open in Colab* qui sopra, esegui la cella *Setup* e cambia i valori nei moduli. Basta un account Google.
-- **Web app**: vedi [Web app](#web-app) per avviarla sul tuo computer o pubblicarla online.
+- **Web app**: apri [thermo-cycles.streamlit.app](https://thermo-cycles.streamlit.app) da qualsiasi computer o telefono. Se l'app è rimasta inattiva può impiegare un minuto a riattivarsi; se alcuni campi non si caricano, ricarica la pagina o prova un altro browser.
 - **Sul tuo computer**: vedi [Installazione](#installazione), poi `python simulate.py`.
 
 ## Cosa fa

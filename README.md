@@ -2,14 +2,17 @@
 
 🇮🇹 [Versione italiana](README.it.md)
 
+[![Web app](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://thermo-cycles.streamlit.app)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Raffoo26/thermo-cycles/blob/main/notebooks/thermo_cycles_demo.ipynb)
+
+**▶ Try it online: [thermo-cycles.streamlit.app](https://thermo-cycles.streamlit.app)**
 
 A Python simulator of thermodynamic power and refrigeration cycles using **real-fluid properties** ([CoolProp](http://www.coolprop.org/)), with **exergy analysis**, an **interactive simulator**, a **web app** and a browser notebook. Built to put into practice what I study in Engineering Thermodynamics and Fluid Machinery courses. Every solver is **validated against worked textbook examples**.
 
 ## Try it without installing anything
 
 - **Google Colab**: click the *Open in Colab* badge above, run the *Setup* cell, then change the values in the forms. Needs only a Google account.
-- **Web app**: see [Web app](#web-app) to run it locally or publish it online.
+- **Web app**: open [thermo-cycles.streamlit.app](https://thermo-cycles.streamlit.app) from any computer or phone. If the app has been idle it may need a minute to wake up; if some fields do not load, reload the page or try another browser.
 - **On your computer**: see [Installation](#installation), then `python simulate.py`.
 
 ## Features
