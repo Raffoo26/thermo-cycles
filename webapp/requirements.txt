@@ -1,5 +1,6 @@
 CoolProp>=6.6
 numpy
 matplotlib
-pandas
-streamlit>=1.30
+pandas<3
+# Pinned: newer Streamlit releases left some requests hanging on Streamlit Community Cloud
+streamlit==1.45.1

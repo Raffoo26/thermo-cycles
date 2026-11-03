@@ -6,6 +6,7 @@ Run locally from the project root:
     streamlit run webapp/streamlit_app.py
 """
 
+import base64
 import io
 import sys
 from pathlib import Path
@@ -72,6 +73,13 @@ def exergy_png(kind, args, T0, T_res) -> bytes:
     plot_exergy(exergy(kind, args, T0, T_res), ax=ax)
     fig.tight_layout()
     return _png(fig)
+
+
+def show_png(png: bytes, alt: str) -> None:
+    """Embed the image in the page itself (no separate download request)."""
+    b64 = base64.b64encode(png).decode()
+    st.markdown(f'<img src="data:image/png;base64,{b64}" alt="{alt}" style="width:100%">',
+                unsafe_allow_html=True)
 
 
 def fluid_picker(label, options, default, key):
@@ -238,7 +246,7 @@ tab_diag, tab_states, tab_exergy, tab_about = st.tabs(
 
 with tab_diag:
     png = diagrams_png(kind, args)
-    st.image(png)
+    show_png(png, "T-s and p-h diagrams")
     st.download_button("Download diagrams (PNG)", png, "thermo_cycle_diagrams.png", "image/png")
 
 with tab_states:
@@ -258,7 +266,7 @@ with tab_exergy:
         st.markdown(f"**Second-law efficiency: {ex.efficiency * 100:.1f} %** — fuel: {ex.fuel_label} "
                     f"({ex.fuel / 1e3:.1f} kJ/kg), product: {ex.product_label} ({ex.product / 1e3:.1f} kJ/kg). "
                     "Change the reservoir temperatures in *Exergy analysis settings* in the sidebar.")
-        st.image(exergy_png(kind, args, T0, T_res))
+        show_png(exergy_png(kind, args, T0, T_res), "Exergy destruction")
         st.dataframe(pd.DataFrame(ex.table()).set_index("Component").style.format(precision=2))
         for n in ex.notes:
             st.info(n)
