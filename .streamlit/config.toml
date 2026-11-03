@@ -1,0 +1,4 @@
+[theme]
+# Accent colour of sliders, checkboxes and tabs: the same blue as the cycle diagrams,
+# so red stays reserved for errors.
+primaryColor = "#1f77b4"
