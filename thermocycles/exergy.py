@@ -7,9 +7,11 @@ heat exchanged with the external reservoirs:
     s_gen = Σ m_out s_out − Σ m_in s_in − Σ q / T_boundary
     exergy destroyed = T0 · s_gen                    (Gouy–Stodola theorem)
 
-Power cycles (Rankine, Brayton): fuel = exergy of the heat from the hot source,
-product = net work.  Refrigeration cycles: fuel = compressor work, product =
-exergy of the cold produced, q_evap (T0 / T_cold − 1).
+Power cycles (Rankine, Brayton, combined): fuel = exergy of the heat from the hot
+source, product = net work.  Refrigeration cycles: fuel = compressor work, product =
+exergy of the cold produced, q_evap (T0 / T_cold − 1).  Heat pumps (transcritical
+CO₂): fuel = compressor work, product = exergy of the heat delivered to the user,
+q_gc (1 − T0 / T_user); the evaporator takes heat from the ambient at T0.
 
 Reservoir temperatures:
     T0_C     : ambient (dead state) temperature; heat rejected to the ambient
@@ -19,6 +21,8 @@ Reservoir temperatures:
                heat-transfer loss in the boiler is then not counted.
     T_cold_C : temperature of the refrigerated space. If omitted, the highest
                fluid temperature in the evaporator is used.
+    T_user_C : temperature at which a heat pump delivers its heat (e.g. hot water).
+               If omitted, the lowest fluid temperature in the gas cooler is used.
 """
 
 from dataclasses import dataclass, field
@@ -74,12 +78,14 @@ class ExergyResults:
 
 
 def exergy_analysis(r, T0_C: float = 25.0, T_source_C: float | None = None,
-                    T_cold_C: float | None = None) -> ExergyResults:
+                    T_cold_C: float | None = None, T_user_C: float | None = None) -> ExergyResults:
     """Exergy destruction per component and second-law efficiency of a cycle result."""
     T0 = T0_C + KELVIN
     T_source = T_source_C + KELVIN if T_source_C is not None else None
     T_cold = T_cold_C + KELVIN if T_cold_C is not None else None
+    T_user = T_user_C + KELVIN if T_user_C is not None else None
     notes = []
+    heat_product = 0.0   # exergy of the heat delivered by a heat pump
 
     destruction: dict[str, float] = {}
     fuel_heat = 0.0      # exergy of heat from the hot source
@@ -106,10 +112,29 @@ def exergy_analysis(r, T0_C: float = 25.0, T_source_C: float | None = None,
             if T_b > T0:
                 raise ValueError("The refrigerated space must be colder than the ambient.")
             cold_product += c.heat * (T0 / T_b - 1)
+        elif c.reservoir == "user":
+            T_b = T_user if T_user is not None else min(T_fluid)
+            if T_b > min(T_fluid) + 1e-6:
+                raise ValueError(f"The heat user ({T_b - KELVIN:.1f} °C) must be colder than the fluid in the "
+                                 f"{c.name.lower()} (down to {min(T_fluid) - KELVIN:.1f} °C).")
+            if T_b <= T0:
+                raise ValueError("The heat user must be warmer than the ambient.")
+            heat_product += -c.heat * (1 - T0 / T_b)
+        elif c.reservoir == "ambient":
+            T_b = T0
+            if T0 < max(T_fluid) - 1e-6:
+                raise ValueError(f"The ambient ({T0_C:.1f} °C) must be at least as warm as the refrigerant "
+                                 f"in the {c.name.lower()} (up to {max(T_fluid) - KELVIN:.1f} °C).")
         s_gen = c.entropy_change - (c.heat / T_b if T_b else 0.0)
         destruction[c.name] = destruction.get(c.name, 0.0) + T0 * s_gen
 
-    if cold_product > 0:
+    if heat_product > 0:
+        fuel, fuel_label = r.w_comp, "compressor work"
+        product, product_label = heat_product, "heat delivered"
+        if T_user is None:
+            notes.append("heat user taken at the gas cooler's lowest fluid temperature: "
+                         "heat-transfer losses in the gas cooler are not counted.")
+    elif cold_product > 0:
         fuel, fuel_label = r.w_comp, "compressor work"
         product, product_label = cold_product, "cold produced"
         if T_cold is None:

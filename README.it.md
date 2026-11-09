@@ -7,7 +7,7 @@
 
 **▶ Provalo online: [thermo-cycles.streamlit.app](https://thermo-cycles.streamlit.app)**
 
-Simulatore in Python di cicli termodinamici diretti e inversi con **proprietà reali dei fluidi** ([CoolProp](http://www.coolprop.org/)), con **analisi exergetica**, **simulatore interattivo**, **web app** e notebook da usare nel browser. Nato per mettere in pratica i corsi di Fisica Tecnica e Macchine a Fluido. Ogni modulo è **validato su esempi svolti di letteratura**.
+Simulatore in Python di cicli termodinamici diretti, combinati, frigoriferi e pompe di calore con **proprietà reali dei fluidi** ([CoolProp](http://www.coolprop.org/)), con **analisi exergetica**, **simulatore interattivo**, **web app** e notebook da usare nel browser. Nato per mettere in pratica i corsi di Fisica Tecnica e Macchine a Fluido. Ogni modulo è **validato su esempi svolti di letteratura**.
 
 ## Provalo senza installare niente
 
@@ -19,20 +19,22 @@ Simulatore in Python di cicli termodinamici diretti e inversi con **proprietà r
 
 | Modulo | Cosa calcola |
 |---|---|
-| **Ciclo Rankine** | Semplice, con **risurriscaldamento**, con **rigenerazione** (rigeneratore aperto) o entrambi. Impianti a vapore e **ORC** con fluidi organici. Rendimento, Back Work Ratio, frazione spillata, portata per una data potenza. |
+| **Ciclo Rankine** | Semplice, con **risurriscaldamento**, con **rigenerazione** tramite un numero qualsiasi di **rigeneratori aperti e chiusi** (spillamenti multipli, condense in cascata all'indietro, differenza terminale di temperatura). Impianti a vapore e **ORC** con fluidi organici. Rendimento, Back Work Ratio, frazioni spillate, portata per una data potenza. |
 | **Frigorifero / pompa di calore** | Compressione di vapore con surriscaldamento, sottoraffreddamento e rendimento del compressore. COP (raffreddamento e riscaldamento), COP di Carnot, rapporto di compressione, temperatura di mandata, capacità volumetrica. |
 | **Ciclo Brayton** | Turbina a gas con aria a proprietà reali, rendimenti di compressore e turbina e **rigeneratore**. |
+| **Ciclo combinato** | Turbina a gas + ciclo a vapore accoppiati da un generatore di vapore a recupero (HRSG): temperatura al camino, **pinch point**, rapporto vapore/aria, ripartizione della potenza, diagramma T-Q. |
+| **Pompa di calore a CO₂ transcritica** | Gas cooler sopra il punto critico, COP di Lorenz, ricerca della **pressione superiore ottimale**. |
 | **Analisi exergetica** | Exergia distrutta in ogni componente (Gouy–Stodola) e rendimento di secondo principio, per ogni ciclo. |
-| **Diagrammi** | Diagrammi **T-s** e **p-h** con curva limite e trasformazioni reali, grafici dell'exergia distrutta, studi parametrici. |
+| **Diagrammi** | Diagrammi **T-s** e **p-h** con curva limite e trasformazioni reali, diagramma **T-Q** dell'HRSG, grafici dell'exergia distrutta, studi parametrici. |
 | **Interfacce** | Simulatore interattivo da terminale, web app Streamlit, notebook Colab, uso da Python. |
 
 Funziona con qualsiasi fluido di CoolProp: acqua, refrigeranti (R134a, R1234yf, R290, R600a, R32, R410A, ammoniaca…), fluidi organici (R245fa, R1233zd(E), pentani, toluene…) e gas (aria, azoto, elio, CO₂).
 
-![Ciclo Rankine con risurriscaldamento e rigenerazione](images/rankine_reheat_regen_Ts_ph.png)
+![Ciclo Rankine con risurriscaldamento, un rigeneratore chiuso e uno aperto](images/rankine_feedwater_heaters_Ts_ph.png)
 
 ## Validazione
 
-Ogni modulo è verificato da test automatici sugli esempi svolti del Moran & Shapiro, *Fundamentals of Engineering Thermodynamics*. Gli scarti restano sotto l'1 % e dipendono dalle proprietà dei fluidi (CoolProp usa equazioni di stato di riferimento, il libro tabelle stampate).
+Ogni modulo è verificato da test automatici (72 test) sugli esempi svolti del Moran & Shapiro, *Fundamentals of Engineering Thermodynamics*. Gli scarti restano sotto l'1–2 % e dipendono dalle proprietà dei fluidi (CoolProp usa equazioni di stato di riferimento, il libro tabelle stampate).
 
 **Ciclo Rankine** (8 MPa / 480 °C o vapore saturo, condensatore a 8 kPa)
 
@@ -45,6 +47,9 @@ Ogni modulo è verificato da test automatici sugli esempi svolti del Moran & Sha
 | 8.4 risurriscaldamento, η<sub>t</sub> = 0.85 | rendimento | 35.1 % | 35.1 % |
 | 8.5 rigeneratore aperto (7 bar), η<sub>t</sub> = 0.85 | rendimento | 36.9 % | 36.9 % |
 | 8.5 rigeneratore aperto, 100 MW netti | portata di vapore | 3.69·10⁵ kg/h | 3.69·10⁵ kg/h |
+| 8.6 risurriscaldamento + rigeneratore chiuso (20 bar) + aperto (3 bar) | rendimento | 43.1 % | 43.1 % |
+| 8.6 stesso, 100 MW netti | portata di vapore | 2.8·10⁵ kg/h | 2.79·10⁵ kg/h |
+| 8.6 stesso | frazioni spillate | 0.1522 / 0.0941 | 0.1496 / 0.0948 |
 
 **Ciclo frigorifero** (R-134a, evaporatore a −10 °C, condensatore a 9 bar, 0.08 kg/s)
 
@@ -64,6 +69,24 @@ Ogni modulo è verificato da test automatici sugli esempi svolti del Moran & Sha
 | 9.5 η<sub>c</sub> = η<sub>t</sub> = 0.80 | rendimento | 24.8 % | 24.9 % |
 | 9.5 η<sub>c</sub> = η<sub>t</sub> = 0.80 | Back Work Ratio | 61.9 % | 61.9 % |
 | 9.6 rigeneratore ε = 0.80 | rendimento | 56.8 % | 56.8 % |
+
+**Ciclo combinato** (Esempio 9.12 — 45 MW; gas: rapporto di compressione 12, 1400 K, η<sub>c</sub> = 0.84, η<sub>t</sub> = 0.88, i fumi escono dall'HRSG a 400 K; vapore: 8 MPa / 400 °C, 8 kPa, η<sub>t</sub> = 0.90, η<sub>p</sub> = 0.80)
+
+| Grandezza | Libro | Questo codice |
+|---|---|---|
+| portata d'aria | 100.87 kg/s | 100.8 kg/s |
+| portata di vapore | 15.6 kg/s | 15.6 kg/s |
+
+Il rendimento combinato risulta 52.7 %. Il codice trova anche un pinch point di soli 2.4 K: il progetto del libro è al limite della fattibilità (un HRSG reale richiede circa 8–15 K) e il programma lo segnala.
+
+**Pompa di calore a CO₂ transcritica**: non c'è un esempio svolto nel libro, quindi la pressione ottimale del gas cooler è confrontata con la correlazione di Liao, Zhao & Jakobsen, *Applied Thermal Engineering* 20 (2000): p<sub>opt</sub> = (2.778 − 0.0157 t<sub>e</sub>) t<sub>gc</sub> + (0.381 t<sub>e</sub> − 9.34) [bar, °C].
+
+| Evaporazione / uscita gas cooler | Correlazione di Liao | Questo codice |
+|---|---|---|
+| 0 °C / 35 °C | 87.9 bar | 87.4 bar |
+| 0 °C / 40 °C | 101.8 bar | 101.3 bar |
+| 0 °C / 45 °C | 115.7 bar | 115.9 bar |
+| 0 °C / 50 °C | 129.6 bar | 131.5 bar |
 
 L'analisi exergetica è verificata controllando che il bilancio exergetico si chiuda (exergia spesa = prodotto + distrutta) su ogni ciclo.
 
@@ -85,6 +108,25 @@ L'analisi exergetica è verificata controllando che il bilancio exergetico si ch
 
 ![Studio parametrico](images/rankine_parametric_study.png)
 ![Pressione ottimale del rigeneratore](images/rankine_fwh_pressure_study.png)
+
+### Più rigeneratori (aperti e chiusi)
+
+I grandi impianti a vapore spillano vapore dalla turbina a più pressioni per preriscaldare l'acqua di alimento. I rigeneratori chiusi sono scambiatori a fascio tubiero (l'acqua esce qualche kelvin, la *TTD*, sotto la temperatura di saturazione del vapore spillato, e la condensa viene laminata verso il rigeneratore successivo); quello aperto (degasatore) miscela le correnti.
+
+165 bar / 540 °C, risurriscaldamento a 35 bar fino a 540 °C, condensatore a 0.07 bar, η<sub>t</sub> = 0.88, η<sub>p</sub> = 0.80, TTD = 3 K:
+
+| Configurazione | Rendimento | Acqua in caldaia | Spillamento totale |
+|---|---|---|---|
+| Nessun rigeneratore | 39.9 % | 40 °C | 0 |
+| 1 aperto (degasatore, 7 bar) | 43.2 % | 168 °C | 0.18 |
+| 1 aperto + 1 chiuso AP | 43.9 % | 261 °C | 0.32 |
+| 1 aperto + 2 chiusi AP | 44.5 % | 261 °C | 0.32 |
+| 1 aperto + 2 AP + 2 BP chiusi | 45.7 % | 261 °C | 0.34 |
+| 1 aperto + 3 AP + 3 BP chiusi | 46.2 % | 273 °C | 0.36 |
+
+Ogni rigeneratore aggiunge un po' meno del precedente: gli impianti reali si fermano a 6–8, quando il guadagno di rendimento non ripaga più il costo dei componenti.
+
+![Rendimento in funzione del numero di rigeneratori](images/rankine_heaters_comparison.png)
 
 ### Ciclo frigorifero e confronto tra refrigeranti
 
@@ -118,6 +160,24 @@ Senza rigenerazione il rendimento cresce sempre con il rapporto di compressione;
 
 ![Rendimento del Brayton in funzione del rapporto di compressione](images/brayton_pressure_ratio_study.png)
 
+### Ciclo combinato (turbina a gas + vapore)
+
+Turbina a gas con rapporto di compressione 18, ingresso turbina 1350 °C, aspirazione a 15 °C (η<sub>c</sub> = 0.88, η<sub>t</sub> = 0.90); HRSG a un livello di pressione a 40 bar / 520 °C con degasatore a 1.5 bar; camino a 170 °C:
+
+| | Rendimento |
+|---|---|
+| Turbina a gas da sola | 41.9 % |
+| Ciclo a vapore da solo | 36.9 % |
+| **Ciclo combinato** | **58.0 %** |
+
+I fumi della turbina a gas (610 °C) andrebbero sprecati in un impianto a ciclo semplice; qui producono 0.155 kg di vapore per kg di aria e il 28 % della potenza totale. Per 400 MW servono 640 kg/s di aria e 99 kg/s di vapore (289 MW dalla turbina a gas + 111 MW dalla turbina a vapore). Il pinch point è di 12.7 K.
+
+![Ciclo combinato: turbina a gas, ciclo a vapore e diagramma T-Q dell'HRSG](images/combined_cycle.png)
+
+Con un HRSG a un solo livello di pressione, raffreddare di più i fumi recupera più calore, finché il pinch point non si chiude; pressioni del vapore più alte lo chiudono prima. Per questo gli impianti moderni usano HRSG a due o tre livelli di pressione.
+
+![Temperatura al camino e pinch point](images/combined_stack_study.png)
+
 ### Ciclo Rankine organico (ORC) per calore a bassa temperatura
 
 Sorgente di calore a circa 150 °C, evaporazione a 120 °C (+5 K di surriscaldamento), condensazione a 35 °C, η<sub>t</sub> = 0.80, η<sub>p</sub> = 0.70:
@@ -135,12 +195,32 @@ Sulla carta l'acqua ha il rendimento più alto, ma condensa in vuoto spinto e ri
 
 ![Diagrammi T-s degli ORC](images/orc_Ts.png)
 
+### Pompa di calore a CO₂ transcritica
+
+La CO₂ (R744) è un refrigerante naturale con punto critico a soli 31 °C, quindi le pompe di calore che scaldano acqua cedono calore **sopra la pressione critica**, in un gas cooler senza condensazione. La pressione superiore diventa una libera scelta di progetto e il COP ha un massimo:
+
+| Uscita gas cooler | Pressione ottimale | COP riscaldamento |
+|---|---|---|
+| 35 °C | 87.4 bar | 3.47 |
+| 40 °C | 101.3 bar | 2.97 |
+| 45 °C | 115.9 bar | 2.62 |
+| 50 °C | 131.5 bar | 2.37 |
+
+(evaporazione a 0 °C, surriscaldamento 5 K, rendimento del compressore 0.70). Più è fredda l'acqua che entra nel gas cooler, più alto è il COP: per questo le pompe di calore a CO₂ sono ottime per l'acqua calda sanitaria, scaldata da 10–15 °C.
+
+![COP in funzione della pressione del gas cooler](images/co2_cop_vs_pressure.png)
+![Ciclo transcritico a CO₂](images/co2_heat_pump_Ts_ph.png)
+
 ### Analisi exergetica: dove si perde il lavoro utile?
 
 ![Exergia distrutta](images/exergy_destruction.png)
 
 - Nell'impianto a vapore (fiamma a 1200 °C, ambiente a 20 °C) la **caldaia** distrugge circa un terzo dell'exergia del combustibile: il calore passa da una fiamma caldissima ad acqua che bolle a ~295 °C. È il motivo per cui i cicli combinati mettono una turbina a gas "sopra" il ciclo a vapore. Le turbine perdono molto meno, le pompe quasi niente.
 - Nel frigorifero (cella a 4 °C, cucina a 25 °C) le perdite sono distribuite su tutti i componenti: compressore, i due scambiatori (differenze di temperatura finite) e la **valvola di laminazione**, che è una trasformazione puramente irreversibile.
+- Nel ciclo combinato il rendimento di secondo principio sale al 67 %: il combustore resta la perdita maggiore (14 % dell'exergia del combustibile), ma i fumi caldi non vengono più buttati via.
+- Nella pompa di calore a CO₂ la perdita maggiore è la **valvola di laminazione** (24 % del lavoro del compressore), perché lamina un fluido supercritico attraverso un salto di pressione molto grande. Per questo i sistemi a CO₂ più avanzati la sostituiscono con un eiettore o un espansore.
+
+![Exergia distrutta nel ciclo combinato](images/combined_exergy.png)
 
 ## Installazione
 
@@ -160,13 +240,15 @@ Ogni volta che apri un nuovo Terminale, entra nella cartella e riattiva l'ambien
 python simulate.py
 ```
 
-Il simulatore chiede quale ciclo vuoi (Rankine, frigorifero / pompa di calore, Brayton), poi ogni valore con la sua **unità di misura** e un **valore predefinito** tra parentesi quadre. Premi Invio per tenere il predefinito, oppure scrivi il tuo valore. Esempio di sessione (il programma è in inglese):
+Il simulatore chiede quale ciclo vuoi (Rankine con qualsiasi numero di rigeneratori, frigorifero / pompa di calore, Brayton, ciclo combinato, pompa di calore a CO₂ transcritica), poi ogni valore con la sua **unità di misura** e un **valore predefinito** tra parentesi quadre. Premi Invio per tenere il predefinito, oppure scrivi il tuo valore. Esempio di sessione (il programma è in inglese):
 
 ```text
 Which cycle do you want to simulate?
     1) Rankine cycle (steam power plant / ORC)
     2) Refrigeration / heat pump cycle
     3) Brayton cycle (gas turbine)
+    4) Combined cycle (gas turbine + steam)
+    5) Transcritical CO2 heat pump
   Choice [1]: 2
 
 VAPOUR-COMPRESSION CYCLE (refrigerator / air conditioner / heat pump)
@@ -188,7 +270,7 @@ Consigli per l'inserimento:
 
 ## Web app
 
-Un'app [Streamlit](https://streamlit.io/) con cursori e campi per ogni ciclo, diagrammi che si aggiornano subito, tabelle degli stati, analisi exergetica e download (PNG, CSV).
+Un'app [Streamlit](https://streamlit.io/) con i campi per tutti e cinque i cicli (Rankine con fino a 4 rigeneratori, Brayton, ciclo combinato, frigorifero, CO₂ transcritica): cambia i valori, premi **Calculate** e ottieni diagrammi, tabelle degli stati, dimensionamento dell'impianto, analisi exergetica e download (PNG, CSV).
 
 Per avviarla sul tuo computer:
 
@@ -205,15 +287,18 @@ Per pubblicarla online gratis su Streamlit Community Cloud:
 ## Usalo da Python
 
 ```python
-from thermocycles import (rankine_reheat_regen_cycle, refrigeration_cycle,
-                          brayton_cycle, exergy_analysis)
-from thermocycles.plots import plot_Ts, plot_ph, plot_exergy
+from thermocycles import (FeedwaterHeater, rankine_reheat_regen_cycle, refrigeration_cycle,
+                          brayton_cycle, combined_cycle, transcritical_heat_pump,
+                          optimal_high_pressure, exergy_analysis)
+from thermocycles.plots import plot_Ts, plot_ph, plot_exergy, plot_hrsg
 
 plant = rankine_reheat_regen_cycle(p_high_bar=80, p_low_bar=0.08, T_max_C=480,
-                                   p_reheat_bar=7, T_reheat_C=440, p_fwh_bar=7,
+                                   p_reheat_bar=7, T_reheat_C=440,
+                                   heaters=[FeedwaterHeater(20, "closed", ttd_K=3),
+                                            FeedwaterHeater(3, "open")],
                                    eta_turbine=0.85, eta_pump=0.85)
 plant.summary()                          # tabella degli stati e risultati
-print(plant.efficiency)                  # ≈ 0.372
+print(plant.extractions)                 # {20: y1, 3: y2}
 plot_Ts(plant)
 
 ex = exergy_analysis(plant, T0_C=20, T_source_C=1200)
@@ -227,6 +312,15 @@ print(hp.cop_heating)                    # COP come pompa di calore
 gt = brayton_cycle(pressure_ratio=10, T_turbine_in_C=1200, T_in_C=15,
                    eta_comp=0.86, eta_turb=0.89, regen_effectiveness=0.8)
 print(gt.efficiency)
+
+cc = combined_cycle(brayton_cycle(18, 1350, T_in_C=15, eta_comp=0.88, eta_turb=0.90),
+                    rankine_reheat_regen_cycle(40, 0.05, 520, eta_turbine=0.88, heaters=[1.5]),
+                    T_stack_C=170)
+print(cc.efficiency, cc.pinch_K)         # ≈ 0.58, ≈ 12.7 K
+plot_hrsg(cc)
+
+p_opt, co2 = optimal_high_pressure(T_evap_C=0, T_gc_out_C=35, superheat_K=5, eta_comp=0.7)
+print(p_opt, co2.cop_heating)            # ≈ 87 bar, ≈ 3.5
 ```
 
 Gli ingressi usano unità pratiche (bar, °C); tutti i risultati sono in unità SI (Pa, K, J/kg). Dividi per 1000 per avere kJ/kg, per 10<sup>5</sup> per avere bar, sottrai 273.15 per avere °C.
@@ -240,12 +334,13 @@ Gli ingressi usano unità pratiche (bar, °C); tutti i risultati sono in unità 
 | `T_max_C` | °C | `None` | Temperatura di ingresso turbina; `None` = vapore saturo secco |
 | `p_reheat_bar` | bar | `None` | Pressione di risurriscaldamento; `None` = niente risurriscaldamento *(solo funzione avanzata)* |
 | `T_reheat_C` | °C | = `T_max_C` | Temperatura dopo il risurriscaldamento *(solo funzione avanzata)* |
-| `p_fwh_bar` | bar | `None` | Pressione del rigeneratore aperto (spillamento); `None` = niente rigenerazione *(solo funzione avanzata)* |
+| `p_fwh_bar` | bar | `None` | Scorciatoia per un solo rigeneratore aperto a questa pressione *(solo funzione avanzata)* |
+| `heaters` | – | `None` | Elenco dei rigeneratori *(solo funzione avanzata)*: `FeedwaterHeater(p_bar, kind, ttd_K)`, una tupla `(p_bar, kind, ttd_K)`, un dizionario o una pressione (= rigeneratore aperto). `kind` è `"open"` o `"closed"`; `ttd_K` [K] è la differenza terminale di temperatura dei rigeneratori chiusi (l'acqua esce a T<sub>sat</sub> − TTD). |
 | `eta_turbine` | – | `1.0` | Rendimento isentropico di ogni tratto di turbina |
 | `eta_pump` | – | `1.0` | Rendimento isentropico di ogni pompa |
 | `fluid` | – | `"Water"` | Nome del fluido in CoolProp |
 
-`rankine_cycle` è il ciclo semplice (stati 1–4). In `rankine_reheat_regen_cycle` gli stati sono numerati nell'ordine del flusso a partire dall'uscita del condensatore; se spillamento e risurriscaldamento sono alla stessa pressione, il vapore viene spillato prima del risurriscaldatore. Le grandezze specifiche sono per kg di vapore che attraversa la caldaia.
+`rankine_cycle` è il ciclo semplice (stati 1–4). In `rankine_reheat_regen_cycle` gli stati sono numerati lungo la linea dell'acqua di alimento a partire dall'uscita del condensatore, poi l'uscita caldaia, l'espansione in turbina e infine le condense dei rigeneratori chiusi; `exhaust` indica lo stato di scarico della turbina. Le condense dei rigeneratori chiusi vengono laminate verso il rigeneratore a pressione inferiore (o il condensatore). Se uno spillamento e risurriscaldamento sono alla stessa pressione, il vapore viene spillato prima del risurriscaldatore. Le grandezze specifiche sono per kg di vapore che attraversa la caldaia.
 
 | Risultato | Unità | Significato |
 |---|---|---|
@@ -253,7 +348,8 @@ Gli ingressi usano unità pratiche (bar, °C); tutti i risultati sono in unità 
 | `w_turbine`, `w_pump`, `w_net` | J/kg | Lavoro di turbina, pompe e netto |
 | `q_in`, `q_out` | J/kg | Calore in caldaia + risurriscaldatore / calore ceduto al condensatore |
 | `bwr` | – | Back Work Ratio l<sub>pompe</sub> / l<sub>turbina</sub> |
-| `extraction_fraction` | – | Frazione di vapore spillata verso il rigeneratore |
+| `extractions` | – | Dizionario {pressione di spillamento [bar]: frazione del vapore in caldaia spillata} |
+| `extraction_fraction` | – | Frazione totale di vapore spillata verso i rigeneratori |
 | `mass_flow_for_power(P)` | kg/s | Portata di vapore per una potenza netta `P` in **W** |
 
 ### Frigorifero / pompa di calore — `refrigeration_cycle(...)`
@@ -291,6 +387,39 @@ Gli ingressi usano unità pratiche (bar, °C); tutti i risultati sono in unità 
 
 Risultati: `efficiency`, `w_comp`, `w_turb`, `w_net`, `q_in`, `q_out` [J/kg], `bwr`, `exhaust_temperature_C`, `mass_flow_for_power(P)`. Stati: 1 aspirazione compressore, 2 mandata compressore, x uscita rigeneratore, 3 ingresso turbina, 4 uscita turbina, y scarico.
 
+### Ciclo combinato — `combined_cycle(gas, steam, T_stack_C)`
+
+| Parametro | Unità | Predefinito | Significato |
+|---|---|---|---|
+| `gas` | – | obbligatorio | Risultato di `brayton_cycle(...)` (ciclo superiore) |
+| `steam` | – | obbligatorio | Risultato di `rankine_cycle(...)` o `rankine_reheat_regen_cycle(...)`; tutto il calore di caldaia e risurriscaldatore viene dai fumi della turbina a gas |
+| `T_stack_C` | °C | `100` | Temperatura dei fumi all'uscita dell'HRSG (camino) |
+
+| Risultato | Unità | Significato |
+|---|---|---|
+| `efficiency` | – | Rendimento combinato (lavoro netto dei due cicli / calore nel combustore) |
+| `w_net`, `q_in`, `q_hrsg` | J/kg aria | Lavoro netto, calore nel combustore, calore recuperato nell'HRSG |
+| `steam_per_air` | kg/kg | Portata di vapore per kg di aria |
+| `gas_share` | – | Frazione della potenza netta prodotta dalla turbina a gas |
+| `pinch_K` | K | Minima differenza di temperatura fumi–acqua (dove l'acqua inizia a bollire) |
+| `stack`, `gas`, `steam` | – | Stato al camino e risultati dei due cicli |
+| `mass_flows_for_power(P)` | kg/s | Portate (aria, vapore) per una potenza netta totale `P` in **W** |
+
+Il pinch point deve essere positivo (altrimenti un `ValueError` spiega come correggere il progetto); sotto 8 K viene aggiunto un avviso.
+
+### Pompa di calore a CO₂ transcritica — `transcritical_heat_pump(...)` e `optimal_high_pressure(...)`
+
+| Parametro | Unità | Predefinito | Significato |
+|---|---|---|---|
+| `T_evap_C` | °C | obbligatorio | Temperatura di evaporazione (sotto la temperatura critica) |
+| `p_high_bar` | bar | obbligatorio | Pressione del gas cooler (sopra la pressione critica); non usato da `optimal_high_pressure` |
+| `T_gc_out_C` | °C | obbligatorio | Temperatura di uscita dal gas cooler |
+| `superheat_K` | K | `0` | Surriscaldamento all'aspirazione del compressore |
+| `eta_comp` | – | `1.0` | Rendimento isentropico del compressore |
+| `fluid` | – | `"CO2"` | Nome del fluido in CoolProp |
+
+`optimal_high_pressure(T_evap_C, T_gc_out_C, superheat_K, eta_comp)` restituisce `(p_opt_bar, risultato)`. I risultati hanno gli stessi attributi di `refrigeration_cycle` (con `q_cond` = calore al gas cooler) più `cop_lorenz_heating` e `gas_cooler_mean_temperature`. Stati: 1 aspirazione compressore, 2 mandata compressore, 3 uscita gas cooler, 4 ingresso evaporatore.
+
 ### Exergia — `exergy_analysis(risultato, ...)`
 
 | Parametro | Unità | Predefinito | Significato |
@@ -299,8 +428,9 @@ Risultati: `efficiency`, `w_comp`, `w_turb`, `w_net`, `q_in`, `q_out` [J/kg], `b
 | `T0_C` | °C | `25` | Temperatura ambiente (stato morto); il calore ceduto all'ambiente attraversa qui il confine |
 | `T_source_C` | °C | `None` | Sorgente calda (fiamma, fumi, acqua calda); `None` = temperatura massima del fluido in ogni riscaldatore |
 | `T_cold_C` | °C | `None` | Cella frigorifera; `None` = temperatura massima del fluido nell'evaporatore |
+| `T_user_C` | °C | `None` | Pompe di calore: temperatura a cui il calore viene fornito (es. acqua calda); `None` = temperatura minima del fluido nel gas cooler |
 
-Risultati: `destruction` (dizionario, J/kg per componente), `fuel`, `product`, `efficiency` (secondo principio), `table()`, `summary()`. Cicli motori: exergia spesa = exergia del calore della sorgente, prodotto = lavoro netto. Frigorifero: exergia spesa = lavoro del compressore, prodotto = exergia del freddo prodotto.
+Risultati: `destruction` (dizionario, J/kg per componente), `fuel`, `product`, `efficiency` (secondo principio), `table()`, `summary()`. Cicli motori e combinati: exergia spesa = exergia del calore della sorgente, prodotto = lavoro netto. Frigorifero: exergia spesa = lavoro del compressore, prodotto = exergia del freddo prodotto. Pompe di calore: exergia spesa = lavoro del compressore, prodotto = exergia del calore fornito (l'evaporatore preleva calore dall'ambiente a T0).
 
 Funzioni di supporto: `saturation_pressure_bar(fluid, T_C)`, `saturation_temperature_C(fluid, p_bar)`, `critical_point(fluid)`. Ogni risultato ha anche `states`, `summary()`, `state_table()` e `warnings`.
 
@@ -313,13 +443,17 @@ python examples/refrigeration_example.py     # frigorifero + confronto refrigera
 python examples/brayton_example.py           # turbina a gas con/senza rigeneratore
 python examples/orc_example.py               # confronto fluidi per ORC
 python examples/exergy_example.py            # exergia distrutta per componente
+python examples/feedwater_heaters_example.py # rigeneratori aperti/chiusi, Moran 8.6, numero di rigeneratori
+python examples/combined_cycle_example.py    # ciclo combinato, diagramma T-Q dell'HRSG, studio camino/pinch
+python examples/co2_heat_pump_example.py     # CO₂ transcritica, pressione ottimale
 pytest                                       # test di validazione e unitari
 ```
 
 ## Struttura del progetto
 
 ```text
-thermocycles/      il pacchetto: core.py, rankine.py, refrigeration.py, brayton.py, exergy.py, plots.py
+thermocycles/      il pacchetto: core.py, rankine.py, refrigeration.py, brayton.py, combined.py,
+                   transcritical.py, exergy.py, plots.py
 simulate.py        simulatore interattivo da terminale
 webapp/            web app Streamlit
 notebooks/         notebook per Google Colab
@@ -329,7 +463,7 @@ tests/             test di validazione e unitari (pytest)
 
 ## Limiti dei modelli
 
-Regime stazionario, nessuna perdita di carico negli scambiatori e nelle tubazioni, nessuna dispersione di calore verso l'ambiente, compressione di vapore monostadio subcritica (niente CO₂ transcritica), ciclo Brayton chiuso ad aria standard (niente chimica della combustione). Sono le ipotesi standard di un corso di Fisica Tecnica.
+Regime stazionario, nessuna perdita di carico negli scambiatori e nelle tubazioni, nessuna dispersione di calore verso l'ambiente, ciclo Brayton chiuso ad aria standard (niente chimica della combustione), HRSG a un solo livello di pressione, condense dei rigeneratori chiusi in cascata all'indietro (non pompate in avanti), compressione di vapore monostadio (niente scambiatore interno né eiettore). Sono le ipotesi standard di un corso di Fisica Tecnica.
 
 ## Roadmap
 
@@ -340,9 +474,11 @@ Regime stazionario, nessuna perdita di carico negli scambiatori e nelle tubazion
 - [x] Confronto fluidi per cicli ORC
 - [x] Analisi exergetica
 - [x] Simulatore interattivo, web app e notebook Colab
-- [ ] Ciclo combinato gas–vapore
-- [ ] Rigeneratori chiusi e spillamenti multipli
-- [ ] Pompa di calore a CO₂ transcritica
+- [x] Ciclo combinato gas–vapore
+- [x] Rigeneratori chiusi e spillamenti multipli
+- [x] Pompa di calore a CO₂ transcritica
+
+Idee per il futuro: HRSG a più livelli di pressione, cicli a vapore supercritici, pompa di calore a CO₂ con scambiatore interno o eiettore.
 
 ## Autore
 

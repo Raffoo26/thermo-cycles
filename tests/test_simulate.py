@@ -48,3 +48,16 @@ def test_parse_fraction_allows_zero():
     assert parse_fraction("0,6") == pytest.approx(0.6)
     with pytest.raises(ValueError):
         parse_fraction("-1")
+
+
+def test_parse_count_and_heater_kind():
+    from simulate import parse_count, parse_heater_kind
+    assert parse_count("3") == 3
+    with pytest.raises(ValueError):
+        parse_count("2.5")
+    with pytest.raises(ValueError):
+        parse_count("9")
+    assert parse_heater_kind("Closed") == "closed"
+    assert parse_heater_kind("aperto") == "open"
+    with pytest.raises(ValueError):
+        parse_heater_kind("mixed")

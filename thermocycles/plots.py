@@ -138,3 +138,42 @@ def plot_exergy(ex, ax=None, title: str | None = None):
 # Backwards-compatible names
 plot_refrigeration_Ts = plot_Ts
 plot_refrigeration_ph = plot_ph
+
+
+def plot_hrsg(c, ax=None, title: str | None = None, n: int = 60):
+    """Temperature–heat (T-Q) diagram of the heat recovery steam generator of a combined cycle.
+
+    x axis: heat transferred per kg of air, from the stack (cold end) to the gas turbine exhaust."""
+    if ax is None:
+        _, ax = plt.subplots(figsize=(8, 5))
+    gas, steam, k = c.gas, c.steam, c.steam_per_air
+    exhaust = gas.states["y"] if "y" in gas.states else gas.states["4"]
+
+    h_g = np.linspace(c.stack.h, exhaust.h, n)
+    T_g = np.array([PropsSI("T", "P", c.stack.p, "H", h, gas.fluid) for h in h_g])
+    ax.plot((h_g - c.stack.h) / 1e3, T_g - KELVIN, "C3-", lw=2, label=f"Gas ({gas.fluid})")
+
+    boiler = next(comp for comp in steam.components if comp.name == "Boiler")
+    s_fw, s_out = boiler.inlets[0][0], boiler.outlets[0][0]
+    T_w, _, h_w = _isobar(s_fw.p, s_fw.h, s_out.h, steam.fluid, n)
+    ax.plot(k * (h_w - s_fw.h) / 1e3, T_w - KELVIN, "C0-", lw=2, label=f"Water / steam ({steam.fluid})")
+    reheater = next((comp for comp in steam.components if comp.name == "Reheater"), None)
+    if reheater is not None:
+        s_in, s_rh = reheater.inlets[0][0], reheater.outlets[0][0]
+        m = reheater.inlets[0][1]
+        q0 = k * (s_out.h - s_fw.h)
+        T_r, _, h_r = _isobar(s_in.p, s_in.h, s_rh.h, steam.fluid, n)
+        ax.plot((q0 + k * m * (h_r - s_in.h)) / 1e3, T_r - KELVIN, "C0--", lw=2, label="Reheat")
+
+    q_pinch = k * (PropsSI("H", "P", s_fw.p, "Q", 0, steam.fluid) - s_fw.h) / 1e3
+    T_sat = PropsSI("T", "P", s_fw.p, "Q", 0, steam.fluid) - KELVIN
+    ax.annotate("", xy=(q_pinch, T_sat), xytext=(q_pinch, c.T_gas_pinch - KELVIN),
+                arrowprops=dict(arrowstyle="<->", color="k"))
+    ax.annotate(f"pinch {c.pinch_K:.1f} K", (q_pinch, (T_sat + c.T_gas_pinch - KELVIN) / 2),
+                xytext=(8, 0), textcoords="offset points", va="center", fontsize=10)
+    ax.set_xlabel("Heat transferred [kJ per kg of air]")
+    ax.set_ylabel("T [°C]")
+    ax.set_title(title or f"HRSG T-Q diagram — stack {c.stack.T - KELVIN:.0f} °C")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="upper left")
+    return ax
